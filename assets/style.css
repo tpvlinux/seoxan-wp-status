@@ -1,0 +1,64 @@
+.seoxan-status-badge {
+    padding: 4px 10px;
+    border-radius: 4px;
+    color: #fff;
+    font-weight: 700;
+}
+
+.seoxan-ok { background: #2ecc71; }
+.seoxan-warn { background: #f1c40f; }
+.seoxan-bad { background: #e74c3c; }
+
+.seoxan-score-box {
+    background: #f5f5f5;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    border-left: 5px solid #0073aa;
+}
+
+.seoxan-score {
+    font-size: 22px;
+    font-weight: 700;
+    margin-top: 10px;
+}
+
+.seoxan-api-teaser {
+    background: #eef7ff;
+    border-left: 5px solid #0073aa;
+    border-radius: 8px;
+    padding: 12px 15px;
+    margin-bottom: 20px;
+}
+
+.seoxan-api-teaser p {
+    margin: 0;
+}
+
+.seoxan-api-box {
+    background: #f5f5f5;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    border-left: 5px solid #2ecc71;
+}
+
+.seoxan-api-key-reveal {
+    background: #fff8e1;
+    border: 1px solid #f1c40f;
+    border-radius: 6px;
+    padding: 12px 15px;
+    margin-bottom: 15px;
+}
+
+.seoxan-api-key-reveal code {
+    display: block;
+    margin-top: 8px;
+    padding: 8px 10px;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+    word-break: break-all;
+    user-select: all;
+}
