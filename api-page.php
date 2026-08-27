@@ -18,6 +18,24 @@ function seoxan_api_settings_page()
         }
     }
 
+    // Acción del panel: fijar / eliminar el token de GitHub a mano, sin
+    // pasar por la API (útil para un sitio suelto, o para probarlo antes de
+    // pushearlo al resto vía POST /self-update-token).
+    $github_token_notice = null;
+
+    if (isset($_POST['seoxan_github_token_nonce']) && check_admin_referer('seoxan_github_token_action', 'seoxan_github_token_nonce')) {
+        if (isset($_POST['seoxan_save_github_token'])) {
+            $token = isset($_POST['seoxan_github_token']) ? trim(wp_unslash($_POST['seoxan_github_token'])) : '';
+            if ($token !== '') {
+                seoxan_set_github_token($token);
+                $github_token_notice = 'ok';
+            }
+        } elseif (isset($_POST['seoxan_clear_github_token'])) {
+            seoxan_clear_github_token();
+            $github_token_notice = 'cleared';
+        }
+    }
+
     $api_meta = seoxan_get_api_key_meta();
     $updates_url = rest_url('seoxan-status/v1/updates');
     $update_plugin_url = rest_url('seoxan-status/v1/update-plugin');
@@ -267,16 +285,46 @@ function seoxan_api_settings_page()
             </p>
 
             <h3>Estado en este sitio</h3>
+
+            <?php if ($github_token_notice === 'ok'): ?>
+                <p><?= seoxan_status_color('ok') ?> Token guardado.</p>
+            <?php elseif ($github_token_notice === 'cleared'): ?>
+                <p><?= seoxan_status_color('warn') ?> Token eliminado.</p>
+            <?php endif; ?>
+
             <p>
                 <?php if ($github_token_info): ?>
                     <?= seoxan_status_color('ok') ?> Token configurado (<code><?= esc_html(seoxan_mask_github_token($github_token_info['token'])) ?></code>),
-                    fuente: <?= $github_token_info['source'] === 'wp-config' ? 'constante en wp-config.php' : 'guardado vía API' ?>.
+                    fuente: <?= $github_token_info['source'] === 'wp-config' ? 'constante en wp-config.php' : 'guardado desde este panel / vía API' ?>.
                 <?php else: ?>
                     <?= seoxan_status_color('warn') ?> No hay ningún token configurado — este sitio no puede comprobar actualizaciones nuevas del propio plugin.
                 <?php endif; ?>
             </p>
 
-            <h3>Fijarlo remotamente (recomendado para muchos sitios)</h3>
+            <?php if (!$github_token_info || $github_token_info['source'] !== 'wp-config'): ?>
+                <form method="post" style="margin-top:10px; max-width:500px;">
+                    <?php wp_nonce_field('seoxan_github_token_action', 'seoxan_github_token_nonce'); ?>
+                    <input type="password" name="seoxan_github_token" placeholder="<?= $github_token_info ? 'Ya configurado — pega uno nuevo para sustituirlo' : 'ghp_… o github_pat_…' ?>"
+                        style="width:100%; margin-bottom:8px;" autocomplete="off">
+                    <button type="submit" name="seoxan_save_github_token" class="button button-primary">
+                        Guardar token
+                    </button>
+                    <?php if ($github_token_info): ?>
+                        <button type="submit" name="seoxan_clear_github_token" class="button"
+                            onclick="return confirm('¿Eliminar el token de GitHub guardado en este sitio? Dejará de poder comprobar actualizaciones del propio plugin.');">
+                            Eliminar token
+                        </button>
+                    <?php endif; ?>
+                </form>
+            <?php else: ?>
+                <p class="description">
+                    Este sitio tiene la constante <code>SEOXAN_STATUS_GITHUB_TOKEN</code> definida en
+                    <code>wp-config.php</code>, que tiene prioridad — quítala de ahí primero si quieres gestionar
+                    el token desde aquí o por API en su lugar.
+                </p>
+            <?php endif; ?>
+
+            <h3 style="margin-top:20px;">Fijarlo remotamente (recomendado para muchos sitios)</h3>
             <p>
                 Pensado para no tener que tocar <code>wp-config.php</code> sitio por sitio: empuja el mismo
                 token a todos tus sitios con una llamada API por sitio, reutilizando la API Key que ya tiene
