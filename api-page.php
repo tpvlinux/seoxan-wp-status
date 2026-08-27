@@ -24,7 +24,9 @@ function seoxan_api_settings_page()
     $update_theme_url = rest_url('seoxan-status/v1/update-theme');
     $update_core_url = rest_url('seoxan-status/v1/update-core');
     $last_update_url = rest_url('seoxan-status/v1/last-update');
+    $self_update_token_url = rest_url('seoxan-status/v1/self-update-token');
     $last_update = seoxan_get_last_update_result();
+    $github_token_info = seoxan_get_github_token();
 ?>
     <div class="wrap seoxan-status">
         <h1>🔑 API Remota</h1>
@@ -255,6 +257,44 @@ function seoxan_api_settings_page()
             </p>
         </div>
 
+        <h2>🔄 Actualizaciones del propio plugin</h2>
+
+        <div class="seoxan-api-box">
+            <p>
+                Este plugin no está en WordPress.org, así que comprueba sus propias versiones nuevas contra
+                releases de su repositorio privado en GitHub. Para poder leer ese repositorio hace falta un
+                token de acceso personal de GitHub (permiso de solo lectura de "Contents" sobre ese repo basta).
+            </p>
+
+            <h3>Estado en este sitio</h3>
+            <p>
+                <?php if ($github_token_info): ?>
+                    <?= seoxan_status_color('ok') ?> Token configurado (<code><?= esc_html(seoxan_mask_github_token($github_token_info['token'])) ?></code>),
+                    fuente: <?= $github_token_info['source'] === 'wp-config' ? 'constante en wp-config.php' : 'guardado vía API' ?>.
+                <?php else: ?>
+                    <?= seoxan_status_color('warn') ?> No hay ningún token configurado — este sitio no puede comprobar actualizaciones nuevas del propio plugin.
+                <?php endif; ?>
+            </p>
+
+            <h3>Fijarlo remotamente (recomendado para muchos sitios)</h3>
+            <p>
+                Pensado para no tener que tocar <code>wp-config.php</code> sitio por sitio: empuja el mismo
+                token a todos tus sitios con una llamada API por sitio, reutilizando la API Key que ya tiene
+                cada uno.
+            </p>
+            <p><code>POST <?= esc_url($self_update_token_url) ?></code></p>
+            <textarea readonly style="width:100%;height:60px;font-family:monospace;">curl -X POST -H "X-Seoxan-Api-Key: TU_CLAVE" -H "Content-Type: application/json" \
+  -d '{"token":"ghp_xxxxxxxxxxxxxxxxxxxx"}' "<?= esc_url($self_update_token_url) ?>"</textarea>
+            <p>
+                <code>GET</code> en la misma URL para comprobar si hay token configurado (nunca devuelve el
+                token completo, solo una vista parcial) y <code>DELETE</code> para eliminarlo.
+            </p>
+            <p>
+                Si el sitio tiene la constante <code>SEOXAN_STATUS_GITHUB_TOKEN</code> definida en
+                <code>wp-config.php</code>, esa tiene prioridad sobre lo guardado por esta vía.
+            </p>
+        </div>
+
         <h2>Seguridad</h2>
 
         <div class="seoxan-api-box">
@@ -272,6 +312,12 @@ function seoxan_api_settings_page()
                 <li><code>wp-content/seoxan-status-backups/</code> contiene temporalmente el código del
                     plugin/tema/núcleo antes de actualizar — no credenciales ni datos de usuarios, solo código
                     ya público. Se borra sola en cuanto termina cada actualización (ver sección anterior).</li>
+                <li>El token de GitHub fijado vía <code>POST /self-update-token</code> se guarda en texto plano
+                    en la base de datos (a diferencia de la API Key de este plugin, que solo se guarda hasheada,
+                    este token hace falta reenviarlo tal cual a GitHub, así que no se puede hashear). Usa un
+                    token de acceso restringido solo a este repositorio y con permiso de solo lectura — así, si
+                    alguna vez se filtrase, el daño posible es que alguien lea el código de este plugin, nunca
+                    que acceda a ningún dato del sitio.</li>
             </ul>
         </div>
     </div>
