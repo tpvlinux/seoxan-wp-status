@@ -18,33 +18,13 @@ function seoxan_api_settings_page()
         }
     }
 
-    // Acción del panel: fijar / eliminar el token de GitHub a mano, sin
-    // pasar por la API (útil para un sitio suelto, o para probarlo antes de
-    // pushearlo al resto vía POST /self-update-token).
-    $github_token_notice = null;
-
-    if (isset($_POST['seoxan_github_token_nonce']) && check_admin_referer('seoxan_github_token_action', 'seoxan_github_token_nonce')) {
-        if (isset($_POST['seoxan_save_github_token'])) {
-            $token = isset($_POST['seoxan_github_token']) ? trim(wp_unslash($_POST['seoxan_github_token'])) : '';
-            if ($token !== '') {
-                seoxan_set_github_token($token);
-                $github_token_notice = 'ok';
-            }
-        } elseif (isset($_POST['seoxan_clear_github_token'])) {
-            seoxan_clear_github_token();
-            $github_token_notice = 'cleared';
-        }
-    }
-
     $api_meta = seoxan_get_api_key_meta();
     $updates_url = rest_url('seoxan-status/v1/updates');
     $update_plugin_url = rest_url('seoxan-status/v1/update-plugin');
     $update_theme_url = rest_url('seoxan-status/v1/update-theme');
     $update_core_url = rest_url('seoxan-status/v1/update-core');
     $last_update_url = rest_url('seoxan-status/v1/last-update');
-    $self_update_token_url = rest_url('seoxan-status/v1/self-update-token');
     $last_update = seoxan_get_last_update_result();
-    $github_token_info = seoxan_get_github_token();
 ?>
     <div class="wrap seoxan-status">
         <h1>🔑 API Remota</h1>
@@ -279,67 +259,12 @@ function seoxan_api_settings_page()
 
         <div class="seoxan-api-box">
             <p>
-                Este plugin no está en WordPress.org, así que comprueba sus propias versiones nuevas contra
-                releases de su repositorio privado en GitHub. Para poder leer ese repositorio hace falta un
-                token de acceso personal de GitHub (permiso de solo lectura de "Contents" sobre ese repo basta).
-            </p>
-
-            <h3>Estado en este sitio</h3>
-
-            <?php if ($github_token_notice === 'ok'): ?>
-                <p><?= seoxan_status_color('ok') ?> Token guardado.</p>
-            <?php elseif ($github_token_notice === 'cleared'): ?>
-                <p><?= seoxan_status_color('warn') ?> Token eliminado.</p>
-            <?php endif; ?>
-
-            <p>
-                <?php if ($github_token_info): ?>
-                    <?= seoxan_status_color('ok') ?> Token configurado (<code><?= esc_html(seoxan_mask_github_token($github_token_info['token'])) ?></code>),
-                    fuente: <?= $github_token_info['source'] === 'wp-config' ? 'constante en wp-config.php' : 'guardado desde este panel / vía API' ?>.
-                <?php else: ?>
-                    <?= seoxan_status_color('warn') ?> No hay ningún token configurado — este sitio no puede comprobar actualizaciones nuevas del propio plugin.
-                <?php endif; ?>
-            </p>
-
-            <?php if (!$github_token_info || $github_token_info['source'] !== 'wp-config'): ?>
-                <form method="post" style="margin-top:10px; max-width:500px;">
-                    <?php wp_nonce_field('seoxan_github_token_action', 'seoxan_github_token_nonce'); ?>
-                    <input type="password" name="seoxan_github_token" placeholder="<?= $github_token_info ? 'Ya configurado — pega uno nuevo para sustituirlo' : 'ghp_… o github_pat_…' ?>"
-                        style="width:100%; margin-bottom:8px;" autocomplete="off">
-                    <button type="submit" name="seoxan_save_github_token" class="button button-primary">
-                        Guardar token
-                    </button>
-                    <?php if ($github_token_info): ?>
-                        <button type="submit" name="seoxan_clear_github_token" class="button"
-                            onclick="return confirm('¿Eliminar el token de GitHub guardado en este sitio? Dejará de poder comprobar actualizaciones del propio plugin.');">
-                            Eliminar token
-                        </button>
-                    <?php endif; ?>
-                </form>
-            <?php else: ?>
-                <p class="description">
-                    Este sitio tiene la constante <code>SEOXAN_STATUS_GITHUB_TOKEN</code> definida en
-                    <code>wp-config.php</code>, que tiene prioridad — quítala de ahí primero si quieres gestionar
-                    el token desde aquí o por API en su lugar.
-                </p>
-            <?php endif; ?>
-
-            <h3 style="margin-top:20px;">Fijarlo remotamente (recomendado para muchos sitios)</h3>
-            <p>
-                Pensado para no tener que tocar <code>wp-config.php</code> sitio por sitio: empuja el mismo
-                token a todos tus sitios con una llamada API por sitio, reutilizando la API Key que ya tiene
-                cada uno.
-            </p>
-            <p><code>POST <?= esc_url($self_update_token_url) ?></code></p>
-            <textarea readonly style="width:100%;height:60px;font-family:monospace;">curl -X POST -H "X-Seoxan-Api-Key: TU_CLAVE" -H "Content-Type: application/json" \
-  -d '{"token":"ghp_xxxxxxxxxxxxxxxxxxxx"}' "<?= esc_url($self_update_token_url) ?>"</textarea>
-            <p>
-                <code>GET</code> en la misma URL para comprobar si hay token configurado (nunca devuelve el
-                token completo, solo una vista parcial) y <code>DELETE</code> para eliminarlo.
-            </p>
-            <p>
-                Si el sitio tiene la constante <code>SEOXAN_STATUS_GITHUB_TOKEN</code> definida en
-                <code>wp-config.php</code>, esa tiene prioridad sobre lo guardado por esta vía.
+                Este plugin no está en WordPress.org, así que comprueba sus propias versiones nuevas contra las
+                releases de su repositorio en GitHub (<a href="https://github.com/tpvlinux/seoxan-wp-status" target="_blank" rel="noopener">tpvlinux/seoxan-wp-status</a>,
+                público). Al ser público, esto es completamente automático: no hace falta configurar nada en
+                ningún sitio. En cuanto detecta una versión nueva, aparece en <strong>Plugins</strong> y en
+                <strong>Escritorio → Actualizaciones</strong> exactamente igual que cualquier otro plugin
+                — "Comprobar de nuevo" en esa pantalla fuerza la comprobación al momento.
             </p>
         </div>
 
@@ -360,12 +285,9 @@ function seoxan_api_settings_page()
                 <li><code>wp-content/seoxan-status-backups/</code> contiene temporalmente el código del
                     plugin/tema/núcleo antes de actualizar — no credenciales ni datos de usuarios, solo código
                     ya público. Se borra sola en cuanto termina cada actualización (ver sección anterior).</li>
-                <li>El token de GitHub fijado vía <code>POST /self-update-token</code> se guarda en texto plano
-                    en la base de datos (a diferencia de la API Key de este plugin, que solo se guarda hasheada,
-                    este token hace falta reenviarlo tal cual a GitHub, así que no se puede hashear). Usa un
-                    token de acceso restringido solo a este repositorio y con permiso de solo lectura — así, si
-                    alguna vez se filtrase, el daño posible es que alguien lea el código de este plugin, nunca
-                    que acceda a ningún dato del sitio.</li>
+                <li>El código de este plugin es público (repositorio en GitHub) — nada de lo que hay en él es
+                    secreto por sí mismo. Lo único que protege cada sitio es su propia API Key, generada al
+                    azar y guardada solo hasheada; conocer el código no permite saltarse esa autenticación.</li>
             </ul>
         </div>
     </div>

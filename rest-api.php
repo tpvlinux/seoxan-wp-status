@@ -58,35 +58,6 @@ add_action('rest_api_init', function () {
         'callback'            => 'seoxan_api_last_update_endpoint',
         'permission_callback' => 'seoxan_api_permission_check',
     ]);
-
-    // Token de GitHub usado por el propio plugin para comprobar sus propias
-    // actualizaciones (ver self-update.php). Pensado para que un panel
-    // central pueda empujar el MISMO token a muchos sitios de golpe, en vez
-    // de tener que editar wp-config.php sitio por sitio.
-    register_rest_route('seoxan-status/v1', '/self-update-token', [
-        [
-            'methods'             => 'GET',
-            'callback'            => 'seoxan_api_get_self_update_token_endpoint',
-            'permission_callback' => 'seoxan_api_permission_check',
-        ],
-        [
-            'methods'             => 'POST',
-            'callback'            => 'seoxan_api_set_self_update_token_endpoint',
-            'permission_callback' => 'seoxan_api_permission_check',
-            'args'                => [
-                'token' => [
-                    'required'    => true,
-                    'type'        => 'string',
-                    'description' => 'Token de acceso personal de GitHub (solo lectura de "Contents") para comprobar actualizaciones de este plugin en su repositorio privado.',
-                ],
-            ],
-        ],
-        [
-            'methods'             => 'DELETE',
-            'callback'            => 'seoxan_api_delete_self_update_token_endpoint',
-            'permission_callback' => 'seoxan_api_permission_check',
-        ],
-    ]);
 });
 
 /**
@@ -334,58 +305,4 @@ function seoxan_api_last_update_endpoint(WP_REST_Request $request)
     }
 
     return new WP_REST_Response(array_merge(['found' => true, 'locked' => $locked], $last_update), 200);
-}
-
-/**
- * GET /self-update-token — si hay un token de GitHub configurado (nunca se
- * devuelve completo, solo una vista parcial y de dónde viene).
- */
-function seoxan_api_get_self_update_token_endpoint(WP_REST_Request $request)
-{
-    $token_info = seoxan_get_github_token();
-
-    if (!$token_info) {
-        return new WP_REST_Response(['configured' => false], 200);
-    }
-
-    return new WP_REST_Response([
-        'configured' => true,
-        'source'     => $token_info['source'], // 'wp-config' o 'option'
-        'preview'    => seoxan_mask_github_token($token_info['token']),
-    ], 200);
-}
-
-/**
- * POST /self-update-token — fija (o sustituye) el token de GitHub que usa
- * este sitio para comprobar actualizaciones del propio plugin. Pensado
- * para pushearse en bloque a muchos sitios desde un panel central.
- */
-function seoxan_api_set_self_update_token_endpoint(WP_REST_Request $request)
-{
-    $token = trim((string) $request->get_param('token'));
-
-    if ($token === '') {
-        return new WP_REST_Response(['success' => false, 'error' => 'El token no puede estar vacío. Usa DELETE para eliminarlo.'], 400);
-    }
-
-    seoxan_set_github_token($token);
-
-    $body = ['success' => true, 'preview' => seoxan_mask_github_token($token)];
-
-    if (defined('SEOXAN_STATUS_GITHUB_TOKEN') && SEOXAN_STATUS_GITHUB_TOKEN) {
-        $body['note'] = 'Guardado, pero este sitio tiene la constante SEOXAN_STATUS_GITHUB_TOKEN definida en wp-config.php, que tiene prioridad — el valor guardado aquí no se usará mientras esa constante siga definida.';
-    }
-
-    return new WP_REST_Response($body, 200);
-}
-
-/**
- * DELETE /self-update-token — elimina el token guardado en la base de
- * datos. No afecta a la constante SEOXAN_STATUS_GITHUB_TOKEN si existe en
- * wp-config.php (esa solo se puede quitar editando el propio fichero).
- */
-function seoxan_api_delete_self_update_token_endpoint(WP_REST_Request $request)
-{
-    seoxan_clear_github_token();
-    return new WP_REST_Response(['success' => true], 200);
 }
