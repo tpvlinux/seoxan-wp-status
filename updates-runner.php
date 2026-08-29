@@ -666,12 +666,20 @@ function seoxan_run_update_shielded($type, $target, callable $attempt, callable 
     $version_after = $get_current_version();
     $changed = $version_after && $version_after !== $version_before;
 
-    // Fallo controlado y sin cambios reales: nada que revertir.
-    if (is_wp_error($result) && !$changed) {
-        seoxan_log_update_result($type, $target, false, $result->get_error_message());
+    // Fuente de verdad real, siempre: si la versión instalada no cambió, no
+    // ha habido actualización — da igual lo que dijera $attempt(), incluso
+    // si no lanzó ningún error. Sin esto, un "éxito" que WordPress reporta
+    // sin haber sustituido realmente el fichero (o un fallo interno nuestro
+    // no relacionado, como el que motivó este mismo arreglo) se traduciría
+    // en un falso success:true de cara al cliente de la API.
+    if (!$changed) {
+        $message = is_wp_error($result)
+            ? $result->get_error_message()
+            : 'WordPress no devolvió ningún error, pero la versión instalada sigue siendo la misma (' . $version_before . '); la actualización no llegó a aplicarse.';
+        seoxan_log_update_result($type, $target, false, $message);
         if ($backup_path) seoxan_delete_backup($backup_path);
         $shielded_done = true;
-        return $result;
+        return is_wp_error($result) ? $result : new WP_Error('seoxan_update_not_applied', $message);
     }
 
     // A partir de aquí el fichero SÍ cambió: éxito normal, o "cambió pese a
@@ -719,17 +727,16 @@ function seoxan_run_update_shielded($type, $target, callable $attempt, callable 
         ? ' (el sitio ya mostraba un problema antes de esta actualización — ' . $pre_health['detail'] . ' —, así que no se ha podido verificar automáticamente si esto lo ha empeorado.)'
         : '';
 
-    if (is_wp_error($result)) {
-        $message = 'Actualizado a la versión ' . $version_after . ' (con un aviso posterior: ' . $result->get_error_message() . ').' . $unprotected_note;
-        seoxan_log_update_result($type, $target, true, $message);
-        $shielded_done = true;
-        return ['new_version' => $version_after, 'target' => $target];
-    }
-
-    seoxan_log_update_result($type, $target, true, 'Actualizado a la versión ' . $version_after . '.' . $unprotected_note);
+    // Llegados aquí, $changed ya confirmó que la versión instalada cambió
+    // de verdad — es un éxito real, tanto si $attempt() no devolvió ningún
+    // error como si devolvió uno posterior al cambio (ya reflejado en el
+    // mensaje). Se responde siempre con la misma forma, no con lo que
+    // devolviera $attempt() (que variaba entre plugin/tema/core).
+    $note = is_wp_error($result) ? (' (con un aviso posterior: ' . $result->get_error_message() . ')') : '';
+    seoxan_log_update_result($type, $target, true, 'Actualizado a la versión ' . $version_after . $note . '.' . $unprotected_note);
     $shielded_done = true;
 
-    return $result;
+    return ['new_version' => $version_after, 'target' => $target];
 }
 
 /* -------------------------------------------------------------------- */
@@ -770,10 +777,16 @@ function seoxan_run_plugin_update($plugin_file)
             return $result;
         }
 
-        if ($result === false || $skin->get_errors()->has_errors()) {
-            return new WP_Error('seoxan_update_failed', $skin->get_errors()->has_errors()
-                ? $skin->get_errors()->get_error_message()
-                : 'La actualización no se pudo completar (motivo desconocido).');
+        if ($result === false) {
+            // Automatic_Upgrader_Skin (a diferencia de WP_Ajax_Upgrader_Skin)
+            // no tiene get_errors() — usamos los mensajes de progreso que sí
+            // expone como mejor información disponible. La comprobación real
+            // de si esto tuvo efecto la hace seoxan_run_update_shielded()
+            // comparando la versión instalada antes/después.
+            $messages = $skin->get_upgrade_messages();
+            return new WP_Error('seoxan_update_failed', $messages
+                ? implode(' ', array_map('wp_strip_all_tags', $messages))
+                : 'La actualización no se pudo completar (WordPress no dio más detalles).');
         }
 
         // Si el plugin estaba activo y el proceso lo desactivó, lo reactivamos.
@@ -820,10 +833,11 @@ function seoxan_run_theme_update($stylesheet)
             return $result;
         }
 
-        if ($result === false || $skin->get_errors()->has_errors()) {
-            return new WP_Error('seoxan_update_failed', $skin->get_errors()->has_errors()
-                ? $skin->get_errors()->get_error_message()
-                : 'La actualización no se pudo completar (motivo desconocido).');
+        if ($result === false) {
+            $messages = $skin->get_upgrade_messages();
+            return new WP_Error('seoxan_update_failed', $messages
+                ? implode(' ', array_map('wp_strip_all_tags', $messages))
+                : 'La actualización no se pudo completar (WordPress no dio más detalles).');
         }
 
         $new_theme = wp_get_theme($stylesheet);
@@ -865,10 +879,11 @@ function seoxan_run_core_update()
             return $result;
         }
 
-        if ($result === false || $skin->get_errors()->has_errors()) {
-            return new WP_Error('seoxan_update_failed', $skin->get_errors()->has_errors()
-                ? $skin->get_errors()->get_error_message()
-                : 'La actualización no se pudo completar (motivo desconocido).');
+        if ($result === false) {
+            $messages = $skin->get_upgrade_messages();
+            return new WP_Error('seoxan_update_failed', $messages
+                ? implode(' ', array_map('wp_strip_all_tags', $messages))
+                : 'La actualización no se pudo completar (WordPress no dio más detalles).');
         }
 
         return ['new_version' => $current->version];
