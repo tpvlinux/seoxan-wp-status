@@ -167,7 +167,18 @@ function seoxan_api_settings_page()
             </p>
             <p><code>GET <?= esc_url($health_url) ?></code></p>
             <textarea readonly style="width:100%;height:60px;font-family:monospace;">curl -H "X-Seoxan-Api-Key: TU_CLAVE" "<?= esc_url($health_url) ?>"</textarea>
-            <textarea readonly style="width:100%;height:50px;font-family:monospace;">{"status": "ok", "plugin": "seoxan-wp-status", "version": "1.7.2"}</textarea>
+            <textarea readonly style="width:100%;height:50px;font-family:monospace;">{"status": "ok", "plugin": "seoxan-wp-status", "version": "1.7.3"}</textarea>
+
+            <h3>Diagnóstico: ¿puede este sitio llegar a GitHub?</h3>
+            <p>
+                Si un sitio no detecta versiones nuevas del propio plugin pese a haber una release publicada,
+                añade <code>?check_github=1</code> para forzar una comprobación de conectividad en vivo contra
+                la API de GitHub — sin necesitar acceso a <code>wp-config.php</code> ni al hosting. Suele ser
+                <code>WP_HTTP_BLOCK_EXTERNAL</code> activo sin <code>api.github.com</code> en la lista blanca, o
+                un firewall del hosting bloqueando esa salida.
+            </p>
+            <textarea readonly style="width:100%;height:60px;font-family:monospace;">curl -H "X-Seoxan-Api-Key: TU_CLAVE" "<?= esc_url($health_url) ?>?check_github=1"</textarea>
+            <textarea readonly style="width:100%;height:60px;font-family:monospace;">{"...": "...", "github_connectivity": {"reachable": false, "detail": "...", "hint": "..."}}</textarea>
         </div>
 
         <h2>🔄 Disparar actualizaciones remotas</h2>

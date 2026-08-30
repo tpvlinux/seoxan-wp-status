@@ -3,7 +3,7 @@
 Plugin Name: Seoxan WP Status
 Plugin URI: https://seoxan.es
 Description: Panel profesional de diagnóstico para WordPress y WooCommerce: autoload, transients, sesiones, Redis, tamaño de tablas.
-Version: 1.7.3
+Version: 1.7.4
 Author: Alex Rubio / SeoXan Tech
 Author URI: https://seoxan.es
 */

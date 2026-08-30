@@ -220,16 +220,70 @@ function seoxan_api_updates_endpoint(WP_REST_Request $request)
  * La versión se lee directamente de la cabecera del propio fichero del
  * plugin, no de una constante aparte — así nunca puede desincronizarse del
  * número real con el que se publicó cada versión.
+ *
+ * Con ?check_github=1 añade una comprobación de conectividad real contra
+ * la API de GitHub (petición en vivo, no cacheada) — pensado para
+ * diagnosticar por API, sin necesitar acceso a wp-config.php ni al
+ * hosting, sitios donde el auto-update del plugin no detecta versiones
+ * nuevas por un firewall saliente o WP_HTTP_BLOCK_EXTERNAL sin
+ * api.github.com en la lista blanca.
  */
 function seoxan_api_health_endpoint(WP_REST_Request $request)
 {
     $data = get_file_data(SEOXAN_STATUS_PATH . 'seoxan-wp-status.php', ['Version' => 'Version']);
 
-    return new WP_REST_Response([
+    $body = [
         'status'  => 'ok',
         'plugin'  => 'seoxan-wp-status',
         'version' => $data['Version'] ?? null,
-    ], 200);
+    ];
+
+    if ($request->get_param('check_github')) {
+        $body['github_connectivity'] = seoxan_check_github_connectivity();
+    }
+
+    return new WP_REST_Response($body, 200);
+}
+
+/**
+ * Prueba en vivo si este sitio puede llegar a la API de GitHub — la misma
+ * comprobación (en espíritu) que hace Plugin Update Checker al buscar
+ * actualizaciones de este plugin, pero disparable a demanda por API para
+ * poder diagnosticar remotamente sin acceso al servidor.
+ */
+function seoxan_check_github_connectivity()
+{
+    $response = wp_remote_get('https://api.github.com/repos/tpvlinux/seoxan-wp-status/releases/latest', [
+        'timeout' => 10,
+    ]);
+
+    if (is_wp_error($response)) {
+        return [
+            'reachable' => false,
+            'detail'    => $response->get_error_message(),
+            'hint'      => 'WordPress no ha podido conectar en absoluto — habitual si WP_HTTP_BLOCK_EXTERNAL está activo en wp-config.php sin api.github.com en WP_ACCESSIBLE_HOSTS, o si el hosting bloquea salidas HTTPS a ese dominio.',
+        ];
+    }
+
+    $status = wp_remote_retrieve_response_code($response);
+
+    if ($status !== 200) {
+        return [
+            'reachable' => false,
+            'detail'    => 'GitHub respondió con el código ' . $status . '.',
+            'hint'      => ($status === 403 || $status === 429)
+                ? 'Probablemente límite de peticiones a la API de GitHub desde la IP de este servidor (60/hora sin autenticación) — reintenta pasado un rato.'
+                : null,
+        ];
+    }
+
+    $body = json_decode(wp_remote_retrieve_body($response));
+    $latest_tag = (is_object($body) && isset($body->tag_name)) ? $body->tag_name : null;
+
+    return [
+        'reachable'  => true,
+        'latest_tag' => $latest_tag,
+    ];
 }
 
 /**
