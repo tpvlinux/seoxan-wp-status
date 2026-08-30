@@ -731,9 +731,12 @@ function seoxan_run_update_shielded($type, $target, callable $attempt, callable 
     // de verdad — es un éxito real, tanto si $attempt() no devolvió ningún
     // error como si devolvió uno posterior al cambio (ya reflejado en el
     // mensaje). Se responde siempre con la misma forma, no con lo que
-    // devolviera $attempt() (que variaba entre plugin/tema/core).
+    // devolviera $attempt() (que variaba entre plugin/tema/core) — salvo un
+    // posible 'note' (p.ej. avisos de reactivación forzada de un plugin
+    // tras la actualización), que si existe se añade al mensaje.
     $note = is_wp_error($result) ? (' (con un aviso posterior: ' . $result->get_error_message() . ')') : '';
-    seoxan_log_update_result($type, $target, true, 'Actualizado a la versión ' . $version_after . $note . '.' . $unprotected_note);
+    $attempt_note = (!is_wp_error($result) && is_array($result) && !empty($result['note'])) ? (' ' . $result['note']) : '';
+    seoxan_log_update_result($type, $target, true, 'Actualizado a la versión ' . $version_after . $note . '.' . $unprotected_note . $attempt_note);
     $shielded_done = true;
 
     return ['new_version' => $version_after, 'target' => $target];
@@ -767,7 +770,7 @@ function seoxan_run_plugin_update($plugin_file)
         return $data['Version'] ?? null;
     };
 
-    return seoxan_run_update_shielded('plugin', $plugin_file, function () use ($plugin_file, $was_active) {
+    $result = seoxan_run_update_shielded('plugin', $plugin_file, function () use ($plugin_file, $was_active) {
         $skin = new Automatic_Upgrader_Skin();
         $upgrader = new Plugin_Upgrader($skin);
 
@@ -789,18 +792,88 @@ function seoxan_run_plugin_update($plugin_file)
                 : 'La actualización no se pudo completar (WordPress no dio más detalles).');
         }
 
-        // Si el plugin estaba activo y el proceso lo desactivó, lo reactivamos.
+        // Plugin_Upgrader::upgrade() SIEMPRE desactiva el plugin antes de
+        // sustituir sus ficheros (deactivate_plugin_before_upgrade()), salvo
+        // que la petición sea un cron de WordPress — una llamada REST no lo
+        // es. Y los filtros que WordPress engancha para ese caso
+        // (active_before/active_after) tampoco reactivan nada: solo tocan
+        // el modo mantenimiento, y solo cuando sí es cron. Fuera del
+        // escritorio de wp-admin (que reactiva aparte, en su propio manejador
+        // AJAX), nadie más lo hace — así que lo hacemos nosotros.
+        $reactivation_note = '';
         if ($was_active && !is_plugin_active($plugin_file)) {
-            activate_plugin($plugin_file);
+            // activate_plugin() puede fallar en silencio (devolver un
+            // WP_Error, p.ej. si detecta cualquier output inesperado
+            // durante el proceso) o directamente lanzar un fatal — ambos
+            // casos algo más probables justo cuando el plugin se actualiza
+            // a sí mismo dentro de la misma petición que lo está
+            // ejecutando. Lo envolvemos para que, pase lo que pase, se
+            // llegue igualmente a la comprobación/respaldo de abajo.
+            $activation_error = null;
+            try {
+                $activation = activate_plugin($plugin_file);
+                if (is_wp_error($activation)) {
+                    $activation_error = $activation->get_error_message();
+                }
+            } catch (Throwable $e) {
+                $activation_error = $e->getMessage();
+            }
+
+            // No nos fiamos de que "no dio error" signifique que quedó
+            // activo: lo comprobamos de verdad, y si sigue sin estarlo, lo
+            // forzamos directamente en la opción — este plugin YA estaba
+            // activo y funcionando antes de esta actualización, no hace
+            // falta volver a "probarlo" en el sandbox de activate_plugin().
+            if (!is_plugin_active($plugin_file)) {
+                $active_plugins = (array) get_option('active_plugins', []);
+                if (!in_array($plugin_file, $active_plugins, true)) {
+                    $active_plugins[] = $plugin_file;
+                    sort($active_plugins);
+                    update_option('active_plugins', $active_plugins);
+                }
+
+                $reactivation_note = $activation_error
+                    ? (' (aviso: activate_plugin() falló al reactivarlo — ' . $activation_error . ' — se ha forzado la reactivación directamente.)')
+                    : ' (aviso: hubo que forzar la reactivación tras la actualización.)';
+            }
         }
 
         $new_data = get_plugin_data(WP_PLUGIN_DIR . '/' . $plugin_file, false, false);
 
-        return [
+        $attempt_result = [
             'plugin'      => $plugin_file,
             'new_version' => $new_data['Version'],
         ];
+        if ($reactivation_note !== '') {
+            $attempt_result['note'] = trim($reactivation_note);
+        }
+
+        return $attempt_result;
     }, $get_version);
+
+    // Red de seguridad final, para CUALQUIER plugin, independiente del
+    // resultado de arriba (éxito, fallo, o lo que sea): Plugin_Upgrader
+    // desactiva el plugin en cuanto arranca, antes incluso de saber si la
+    // actualización va a salir bien — así que si el intento falla (paquete
+    // corrupto, red...) DESPUÉS de esa desactivación pero ANTES de llegar a
+    // la reactivación de dentro del intento (que solo se ejecuta en la
+    // ruta de éxito), o si un fatal impide llegar siquiera a ese punto, el
+    // plugin se queda desactivado sin que nadie se lo pidiera — no es lo
+    // que el admin pidió (pidió actualizar, no apagar). Esta comprobación
+    // no depende de nada de lo anterior, así que lo arregla en cualquier
+    // caso. Especialmente crítico cuando el plugin es este mismo: uno que
+    // se desactiva a sí mismo se lleva por delante la propia API que
+    // serviría para arreglarlo después.
+    if ($was_active && !is_plugin_active($plugin_file)) {
+        $active_plugins = (array) get_option('active_plugins', []);
+        if (!in_array($plugin_file, $active_plugins, true)) {
+            $active_plugins[] = $plugin_file;
+            sort($active_plugins);
+            update_option('active_plugins', $active_plugins);
+        }
+    }
+
+    return $result;
 }
 
 /**
