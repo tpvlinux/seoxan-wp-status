@@ -20,6 +20,7 @@ function seoxan_api_settings_page()
 
     $api_meta = seoxan_get_api_key_meta();
     $updates_url = rest_url('seoxan-status/v1/updates');
+    $health_url = rest_url('seoxan-status/v1/health');
     $update_plugin_url = rest_url('seoxan-status/v1/update-plugin');
     $update_theme_url = rest_url('seoxan-status/v1/update-theme');
     $update_core_url = rest_url('seoxan-status/v1/update-core');
@@ -156,6 +157,17 @@ function seoxan_api_settings_page()
   ],
   "checked_at": "2026-08-27 10:00:00"
 }</textarea>
+
+            <h3>Comprobación rápida: solo la versión de este plugin</h3>
+            <p>
+                Para no tener que recorrer la lista completa de <code>plugins</code> buscando
+                <code>seoxan-wp-status</code>, <code>GET /health</code> devuelve directamente su versión —
+                útil, por ejemplo, para confirmar qué versión quedó instalada de verdad tras reactivar el
+                plugin a mano en un sitio.
+            </p>
+            <p><code>GET <?= esc_url($health_url) ?></code></p>
+            <textarea readonly style="width:100%;height:60px;font-family:monospace;">curl -H "X-Seoxan-Api-Key: TU_CLAVE" "<?= esc_url($health_url) ?>"</textarea>
+            <textarea readonly style="width:100%;height:50px;font-family:monospace;">{"status": "ok", "plugin": "seoxan-wp-status", "version": "1.7.2"}</textarea>
         </div>
 
         <h2>🔄 Disparar actualizaciones remotas</h2>

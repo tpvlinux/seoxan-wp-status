@@ -212,9 +212,24 @@ function seoxan_api_updates_endpoint(WP_REST_Request $request)
     ], 200);
 }
 
+/**
+ * GET /health — comprobación ligera de que la API responde, junto con la
+ * versión de este mismo plugin instalada en el sitio (útil para confirmar,
+ * por ejemplo tras reactivarlo a mano, qué versión quedó realmente en
+ * disco, sin tener que buscarla dentro de la lista completa de GET /updates).
+ * La versión se lee directamente de la cabecera del propio fichero del
+ * plugin, no de una constante aparte — así nunca puede desincronizarse del
+ * número real con el que se publicó cada versión.
+ */
 function seoxan_api_health_endpoint(WP_REST_Request $request)
 {
-    return new WP_REST_Response(['status' => 'ok', 'plugin' => 'seoxan-wp-status'], 200);
+    $data = get_file_data(SEOXAN_STATUS_PATH . 'seoxan-wp-status.php', ['Version' => 'Version']);
+
+    return new WP_REST_Response([
+        'status'  => 'ok',
+        'plugin'  => 'seoxan-wp-status',
+        'version' => $data['Version'] ?? null,
+    ], 200);
 }
 
 /**
